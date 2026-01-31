@@ -2,8 +2,8 @@ local love = require("love")
 
 function Button(text, func, func_param, width, height)
     return {
-        width = width or 100,
-        height = height or 100,
+        width = width or 200,
+        height = height or 60,
         func = func or function ()
             print("This button has no function assigned.")
         end,
@@ -11,9 +11,6 @@ function Button(text, func, func_param, width, height)
         text = text or "Button",
         button_x = 0,
         button_y = 0,
-        text_x = 0,
-        text_y = 0,
-        pressed = false,
 
         is_hovered = function(self, mx, my)
             return mx >= self.button_x and mx <= self.button_x + self.width and
@@ -22,7 +19,6 @@ function Button(text, func, func_param, width, height)
 
         on_mouse_pressed = function(self, mx, my, button)
             if self:is_hovered(mx, my) and button == 1 then
-                self.pressed = true
                 if self.func then
                     if self.func_param then
                         self.func(self.func_param)
@@ -32,53 +28,47 @@ function Button(text, func, func_param, width, height)
                 end
             end
         end,
-        
 
-        draw = function(self, button_x, button_y, text_x, text_y)
-            self.button_x = button_x or self.button_x
-            self.button_y = button_y or self.button_y
-            self.text_x = text_x or self.button_x
-            self.text_y = text_y or self.button_y
-
-            local border_radius = 10
-            local shadow_offset = 4
-
+        draw = function(self, x, y)
+            self.button_x = x or self.button_x
+            self.button_y = y or self.button_y
             
             local mx, my = love.mouse.getPosition()
             local hovered = self:is_hovered(mx, my)
 
-           
-            local r, g, b = 0.3, 0.6, 0.9
-
+            -- Retro Sci-Fi Style
+            local r, g, b = 45/255, 225/255, 145/255 -- Default Neon Cyan/Green
             if hovered then
-                r = r + 0.1
-                g = g + 0.1
-                b = b + 0.1
+                r, g, b = 108/255, 56/255, 245/255 -- Purple on hover
             end
 
-           
-            love.graphics.setColor(0, 0, 0, 0.3)
-            love.graphics.rectangle("fill", self.button_x + shadow_offset, self.button_y + shadow_offset, self.width, self.height, border_radius, border_radius)
+            -- Background (Transparent with border)
+            love.graphics.setColor(r, g, b, 0.2)
+            love.graphics.rectangle("fill", self.button_x, self.button_y, self.width, self.height)
 
-            
-            love.graphics.setColor(r, g, b)
-            love.graphics.rectangle("fill", self.button_x, self.button_y, self.width, self.height, border_radius, border_radius)
-
-            
-            love.graphics.setColor(r * 0.8, g * 0.8, b * 0.8)
+            -- Border (Glowing effect simulated by drawing lines)
+            love.graphics.setColor(r, g, b, 1)
             love.graphics.setLineWidth(2)
-            love.graphics.rectangle("line", self.button_x, self.button_y, self.width, self.height, border_radius, border_radius)
-
+            love.graphics.rectangle("line", self.button_x, self.button_y, self.width, self.height)
             
-            love.graphics.setColor(1, 1, 1)
-            local font = love.graphics.getFont()
-            local textWidth = font:getWidth(self.text)
-            local textHeight = font:getHeight()
-            local text_x_centered = self.button_x + (self.width - textWidth) / 2
-            local text_y_centered = self.button_y + (self.height - textHeight) / 2
-            love.graphics.print(self.text, text_x_centered, text_y_centered)
+            -- Corner Accents
+            local corner_len = 10
+            love.graphics.setLineWidth(4)
+            -- Top Left
+            love.graphics.line(self.button_x, self.button_y, self.button_x + corner_len, self.button_y)
+            love.graphics.line(self.button_x, self.button_y, self.button_x, self.button_y + corner_len)
+            -- Bottom Right
+            love.graphics.line(self.button_x + self.width, self.button_y + self.height, self.button_x + self.width - corner_len, self.button_y + self.height)
+            love.graphics.line(self.button_x + self.width, self.button_y + self.height, self.button_x + self.width, self.button_y + self.height - corner_len)
 
-            love.graphics.setColor(1, 1, 1)
+            -- Text
+            love.graphics.setColor(1, 1, 1, 1)
+            local font = love.graphics.getFont()
+            local textW = font:getWidth(self.text)
+            local textH = font:getHeight()
+            love.graphics.print(self.text, self.button_x + self.width/2 - textW/2, self.button_y + self.height/2 - textH/2)
+            
+            love.graphics.setLineWidth(1)
         end
     }
 end

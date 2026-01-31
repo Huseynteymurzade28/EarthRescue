@@ -1,9 +1,9 @@
 local love = require("love")
 
 function love.conf(t)
-    t.window.title = "OrbRescue"
-    t.window.width = 800
-    t.window.height = 600
+    t.window.title = "OrbRescue - Retro Space"
+    t.window.width = 1200
+    t.window.height = 800
     t.window.resizable = false
     t.window.vsync = 1
     t.console = false

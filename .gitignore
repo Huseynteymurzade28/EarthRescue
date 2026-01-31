@@ -1,0 +1,28 @@
+# LÖVE
+/love
+/love.exe
+/game.exe
+/liblove*
+
+# Lua
+.luacheckrc
+/luac.out
+
+# System
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.idea/
+
+# Binaries
+*.dll
+*.so
+*.dylib
+
+# Nix / Direnv
+.direnv/
+flake.lock
