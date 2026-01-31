@@ -52,6 +52,8 @@ local asteroids = {}
 local bullets = {}
 local asteroid_timer = 0
 local asteroid_spawn_rate = 2 
+local enemy_timer = 0
+local enemy_spawn_rate = 3 -- Start slower
 
 -- Starfield
 local stars = {}
@@ -84,6 +86,8 @@ local function startNewGame()
     asteroids = {}
     bullets = {}
     asteroid_timer = 0
+    enemy_timer = 0
+    enemy_spawn_rate = 3
     
     enemies = {
         enemy(1)
@@ -168,6 +172,13 @@ function love.update(dt)
         if asteroid_timer > asteroid_spawn_rate then
             asteroid_timer = 0
             table.insert(asteroids, Asteroid(game.difficulty))
+        enemy_timer = enemy_timer + dt
+        -- Cap max enemies to avoid flooding
+        if enemy_timer > enemy_spawn_rate and #enemies < (game.difficulty + 2) then
+            enemy_timer = 0
+            table.insert(enemies, enemy(game.difficulty))
+        end
+
         end
 
         -- Update Entities
@@ -259,14 +270,18 @@ function love.update(dt)
             -- If bullet hit something, we already removed it in logic above
         end
 
-
         -- Level Up Logic
         for i = 1, #game.levels do
             if math.floor(game.points) >= game.levels[i] and game.current_level == i then
                 game.current_level = i + 1
                 game.difficulty = game.difficulty + 1
-                table.insert(enemies, enemy(game.difficulty))
+                
+                -- Make game harder
                 asteroid_spawn_rate = math.max(0.5, 2 - (game.difficulty * 0.2))
+                enemy_spawn_rate = math.max(1.0, 3 - (game.difficulty * 0.3))
+                
+                -- Keep spawning enemies
+                table.insert(enemies, enemy(game.difficulty))
             end
         end
         game.points = game.points + dt
@@ -320,6 +335,7 @@ function love.draw()
         love.graphics.printf("EARTH RESCUE", 0, cy - 200, love.graphics.getWidth(), "center")
 
         -- Buttons Stack
+        love.graphics.setFont(fonts.large.font) -- Set font for buttons
         local spacing = 80
         local start_y = cy - 30 
         
@@ -338,6 +354,7 @@ function love.draw()
         love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.printf("Controls\n\nMouse: Move Ship\nLeft Click: Shoot Laser", 0, cy - 80, love.graphics.getWidth(), "center")
         
+        love.graphics.setFont(fonts.large.font) -- Set font for buttons
         buttons.settings_state.back:draw(cx - buttons.settings_state.back.width / 2, cy + 100)
         
         DrawCursor(love.mouse.getPosition())
@@ -347,6 +364,7 @@ function love.draw()
         love.graphics.setColor(1, 0, 0)
         love.graphics.printf("MISSION FAILED", 0, cy - 200, love.graphics.getWidth(), "center")
 
+        love.graphics.setFont(fonts.large.font) -- Set font for buttons
         local spacing = 80
         local start_y = cy 
         
