@@ -100,6 +100,8 @@ function Player(modifiers)
             phoenix = 0
         },
         
+        jokers = {},
+        
         energy_orbs = {},
         plasma_storms = {},
         black_holes = {},
@@ -112,6 +114,20 @@ function Player(modifiers)
         
         keys = {w = false, a = false, s = false, d = false},
         mouse_down = false,
+        dash_cooldown = 0,
+        is_dashing = false,
+        dash_timer = 0,
+        
+        dash = function(self)
+            if self.dash_cooldown <= 0 and not self.is_dashing then
+                self.is_dashing = true
+                self.dash_timer = 0.2
+                self.dash_cooldown = 2
+                self.invulnerable = 0.2
+                return true
+            end
+            return false
+        end,
         
         updateKeys = function(self, key, pressed)
             local k = key:lower()
@@ -124,6 +140,15 @@ function Player(modifiers)
         move = function(self, dt)
             local dx, dy = 0, 0
             
+            if self.is_dashing then
+                self.dash_timer = self.dash_timer - dt
+                if self.dash_timer <= 0 then
+                    self.is_dashing = false
+                end
+            end
+            
+            self.dash_cooldown = math.max(0, self.dash_cooldown - dt)
+            
             if self.keys.w then dy = dy - 1 end
             if self.keys.s then dy = dy + 1 end
             if self.keys.a then dx = dx - 1 end
@@ -135,6 +160,7 @@ function Player(modifiers)
                 dy = dy / len
                 
                 local speed = 400 * speed_mod * (1 + (self.powerups.speed_boost or 0) * 0.15)
+                if self.is_dashing then speed = speed * 4 end
                 self.x = self.x + dx * speed * dt
                 self.y = self.y + dy * speed * dt
             end
@@ -206,28 +232,22 @@ function Player(modifiers)
             local spread_count = 1 + self.powerups.spread * 2 + self.powerups.multi_shot * 7
             local triple_count = self.powerups.triple_shot
             local double_chance = self.powerups.double_tap * 0.15
+            local has_homing = self.powerups.homing > 0
             
-            if spread_count > 1 then
-                local start_angle = angle - (spread_count - 1) * 0.08
-                for i = 1, spread_count do
-                    table.insert(bullets_created, create_bullet(start_angle + (i-1) * 0.08, false))
-                    if math.random() < double_chance then
-                        table.insert(bullets_created, create_bullet(start_angle + (i-1) * 0.08, false))
-                    end
-                end
-            elseif triple_count > 0 then
-                local count = 2 + triple_count * 2
-                local start_angle = angle - (count - 1) * 0.12
+            if spread_count > 1 or triple_count > 0 then
+                local count = spread_count > 1 and spread_count or (2 + triple_count * 2)
+                local spread_angle = spread_count > 1 and 0.08 or 0.12
+                local start_angle = angle - (count - 1) * spread_angle
                 for i = 1, count do
-                    table.insert(bullets_created, create_bullet(start_angle + (i-1) * 0.12, false))
+                    table.insert(bullets_created, create_bullet(start_angle + (i-1) * spread_angle, has_homing))
                     if math.random() < double_chance then
-                        table.insert(bullets_created, create_bullet(start_angle + (i-1) * 0.12, false))
+                        table.insert(bullets_created, create_bullet(start_angle + (i-1) * spread_angle, has_homing))
                     end
                 end
             else
-                table.insert(bullets_created, create_bullet(angle, self.powerups.homing > 0))
+                table.insert(bullets_created, create_bullet(angle, has_homing))
                 if math.random() < double_chance then
-                    table.insert(bullets_created, create_bullet(angle, self.powerups.homing > 0))
+                    table.insert(bullets_created, create_bullet(angle, has_homing))
                 end
             end
             
@@ -375,6 +395,79 @@ function Player(modifiers)
             if self.powerups[power_name] then
                 self.powerups[power_name] = 0
             end
+        end,
+        
+        addJoker = function(self, joker_data)
+            table.insert(self.jokers, joker_data)
+            
+            if joker_data.type == "passive" then
+                if joker_data.trigger == "lucky" then
+                    self.lucky_chance = (self.lucky_chance or 0) + (joker_data.value or 0.1)
+                elseif joker_data.trigger == "gold" then
+                    self.gold_bonus = (self.gold_bonus or 0) + (joker_data.value or 0.25)
+                elseif joker_data.trigger == "dodge" then
+                    self.joker_dodge = (self.joker_dodge or 0) + (joker_data.value or 0.1)
+                elseif joker_data.trigger == "crown" then
+                    self.crown_bonus = (self.crown_bonus or 0) + (joker_data.value or 0.3)
+                elseif joker_data.trigger == "glass" then
+                    self.glass_bonus = (self.glass_bonus or 0) + (joker_data.value or 0.5)
+                elseif joker_data.trigger == "stone" then
+                    self.stone_reduction = (self.stone_reduction or 0) + (joker_data.value or 0.2)
+                elseif joker_data.trigger == "streak" then
+                    self.streak_bonus = (self.streak_bonus or 0) + (joker_data.value or 0.05)
+                elseif joker_data.trigger == "combo" then
+                    self.combo_bonus = (self.combo_bonus or 0) + (joker_data.value or 0.2)
+                end
+            elseif joker_data.type == "active" then
+                table.insert(self.active_jokers, {
+                    trigger = joker_data.trigger,
+                    cooldown = joker_data.cooldown,
+                    cooldown_timer = 0,
+                    active = false,
+                    active_timer = 0
+                })
+            end
+        end,
+        
+        active_jokers = {},
+        
+        useActiveJoker = function(self, index)
+            local joker = self.active_jokers[index]
+            if joker and joker.cooldown_timer <= 0 then
+                joker.active = true
+                joker.active_timer = 5
+                joker.cooldown_timer = joker.cooldown
+                return true
+            end
+            return false
+        end,
+        
+        updateJokers = function(self, dt)
+            for i = #self.active_jokers, 1, -1 do
+                local joker = self.active_jokers[i]
+                if joker.cooldown_timer > 0 then
+                    joker.cooldown_timer = joker.cooldown_timer - dt
+                end
+                if joker.active then
+                    joker.active_timer = joker.active_timer - dt
+                    if joker.active_timer <= 0 then
+                        joker.active = false
+                    end
+                end
+            end
+        end,
+        
+        getJokerStats = function(self)
+            return {
+                lucky_chance = self.lucky_chance or 0,
+                gold_bonus = self.gold_bonus or 0,
+                joker_dodge = self.joker_dodge or 0,
+                crown_bonus = self.crown_bonus or 0,
+                glass_bonus = self.glass_bonus or 0,
+                stone_reduction = self.stone_reduction or 0,
+                streak_bonus = self.streak_bonus or 0,
+                combo_bonus = self.combo_bonus or 0
+            }
         end,
         
         onEnemyKill = function(self, enemies)
@@ -639,7 +732,23 @@ function Player(modifiers)
                     love.graphics.setColor(rarity_color[1], rarity_color[2], rarity_color[3])
                     love.graphics.print(p.name .. " x" .. p.level, tracker_x, py)
                 end
-            
+                
+                if #self.jokers > 0 then
+                    local joker_y = tracker_y + (#active_powers + 2) * 16
+                    love.graphics.setFont(love.graphics.newFont(11))
+                    love.graphics.setColor(1, 0.9, 0.3)
+                    love.graphics.print("🎭 JOKERS:", tracker_x, joker_y)
+                    
+                    for i, joker in ipairs(self.jokers) do
+                        local jy = joker_y + i * 14
+                        local jcolor = {0.8, 0.7, 0.3}
+                        if joker.type == "active" then jcolor = {0.9, 0.4, 0.4}
+                        elseif joker.type == "lucky" then jcolor = {0.4, 0.9, 0.5}
+                        end
+                        love.graphics.setColor(jcolor[1], jcolor[2], jcolor[3])
+                        love.graphics.print(joker.name, tracker_x + 10, jy)
+                    end
+                end
             love.graphics.setColor(1, 1, 1)
         end
     }

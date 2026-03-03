@@ -18,6 +18,7 @@ local game = {
         running = false,
         gameover = false,
         choose_power = false,
+        choose_joker = false,
         upgrades = false
     },
     points = 0,
@@ -282,6 +283,16 @@ function love.mousepressed(x, y, button)
                     game.state.choose_power = false
                 end
             end
+        elseif game.state.choose_joker then
+            local cx = love.graphics.getWidth() / 2
+            local cy = love.graphics.getHeight() / 2
+            local joker = power_system:handle_joker_click(x, y)
+            if joker then
+                player:addJoker(joker)
+                particles:powerup(player.x, player.y, {1, 0.9, 0.2})
+                particles:flash(1, 0.8, 0.2, 0.4, 0.3)
+                game.state.choose_joker = false
+            end
         elseif game.state.running then
             player.mouse_down = true
         end
@@ -338,11 +349,21 @@ end
 function love.keypressed(key)
     if game.state.running then
         player:updateKeys(key, true)
+        if key == "space" then
+            local dashed = player:dash()
+            if dashed then
+                particles:flash(0.5, 0.8, 1, 0.3, 0.15)
+                particles:shake(5, 0.2)
+            end
+        end
     end
     if key == "escape" then
         if game.state.choose_power then
             power_system:skip_offer()
             game.state.choose_power = false
+        elseif game.state.choose_joker then
+            power_system:skip_offer()
+            game.state.choose_joker = false
         elseif game.state.running then
             game.state.paused = not game.state.paused
         end
@@ -401,12 +422,20 @@ function love.update(dt)
         return
     end
     
+    if game.state.choose_joker then
+        if power_system:is_joker_offering() == false then
+            game.state.choose_joker = false
+        end
+        return
+    end
+    
     if not game.state.running then return end
     
     local time_slow = player:getTimeSlowFactor()
     local effective_dt = dt * time_slow
     
     player:move(dt)
+    player:updateJokers(dt)
     
     if player.mouse_down then
         local bullet_list = player:shoot(mouse_x, mouse_y, enemies, bullets)
@@ -570,6 +599,8 @@ function love.update(dt)
                     
                     player:onEnemyKill(enemies)
                     
+                    particles:combo(game.combo)
+                    
                     if player.powerups.explosion > 0 then
                         particles:explosion(e.x, e.y, e.radius * 1.5, {1, 0.5, 0})
                         for _, nearby in ipairs(enemies) do
@@ -636,8 +667,7 @@ function love.update(dt)
             asteroid_spawn_rate = math.max(0.5, 2 - (game.difficulty * 0.15))
             enemy_spawn_rate = math.max(0.8, 2.5 - (game.difficulty * 0.2))
             
-            particles:flash(0.2, 0.8, 0.2, 0.3, 0.3)
-            particles:shake(5, 0.3)
+            particles:levelup()
         end
     end
     
@@ -716,11 +746,11 @@ function love.draw()
             player:drawHUD()
         end
         
-        local time_to_power = 10 - power_system.offer_timer
+        local time_to_power = 18 - power_system.offer_timer
         if time_to_power > 0 and not game.state.choose_power then
             local bar_width = 150
             local bar_x = love.graphics.getWidth() - bar_width - 20
-            local progress = time_to_power / 10
+            local progress = time_to_power / 18
             
             love.graphics.setColor(0.1, 0.1, 0.15, 0.7)
             love.graphics.rectangle("fill", bar_x - 10, 15, bar_width + 20, 35)
@@ -737,8 +767,37 @@ function love.draw()
             love.graphics.printf("POWER", bar_x, 43, bar_width, "center")
         end
         
+        if not player.has_joker then
+            local time_to_joker = 45 - power_system.joker_timer
+            if time_to_joker > 0 and not game.state.choose_joker and game.state.running then
+                local bar_width = 150
+                local bar_x = love.graphics.getWidth() - bar_width - 20
+                local bar_y = 55
+                local progress = time_to_joker / 45
+                
+                love.graphics.setColor(0.1, 0.1, 0.15, 0.7)
+                love.graphics.rectangle("fill", bar_x - 10, bar_y, bar_width + 20, 30)
+                
+                love.graphics.setColor(0.3, 0.3, 0.35)
+                love.graphics.rectangle("fill", bar_x, bar_y + 8, bar_width, 14)
+                
+                local jpulse = math.sin(love.timer.getTime() * 2) * 0.2 + 0.8
+                love.graphics.setColor(1 * jpulse, 0.85 * jpulse, 0.2 * jpulse, 1)
+                love.graphics.rectangle("fill", bar_x, bar_y + 8, bar_width * progress, 14)
+                
+                love.graphics.setColor(0.7, 0.65, 0.5)
+                love.graphics.setFont(love.graphics.newFont(10))
+                love.graphics.printf("🎭 JOKER", bar_x, bar_y + 25, bar_width, "center")
+            end
+        end
+        
         if game.state.choose_power then
             power_system:draw(cx, cy)
+            DrawCursor(love.mouse.getPosition())
+        end
+        
+        if game.state.choose_joker then
+            power_system:draw_joker_offer(cx, cy)
             DrawCursor(love.mouse.getPosition())
         end
     end
@@ -779,8 +838,8 @@ function love.draw()
         
         love.graphics.setColor(0.5, 0.6, 0.8, 0.8)
         love.graphics.setFont(fonts.small.font)
-        love.graphics.printf("WASD - Move    •    Mouse - Aim    •    Click - Shoot    •    ESC - Pause", 0, cy - 50, love.graphics.getWidth(), "center")
-        love.graphics.printf("F11 - Fullscreen    •    Right Click - Skip Power", 0, cy - 32, love.graphics.getWidth(), "center")
+        love.graphics.printf("WASD - Move    |    Mouse - Aim    |    Click - Shoot", 0, cy - 50, love.graphics.getWidth(), "center")
+        love.graphics.printf("SPACE - Dash    |    Right Click - Skip Power    |    ESC - Pause", 0, cy - 32, love.graphics.getWidth(), "center")
         
         love.graphics.setColor(0.08, 0.1, 0.15, 0.9)
         love.graphics.rectangle("fill", cx - 220, cy + 20, 440, 80)

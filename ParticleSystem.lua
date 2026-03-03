@@ -7,6 +7,9 @@ function ParticleSystem.new()
     local self = setmetatable({}, ParticleSystem)
     self.particles = {}
     self.screen_shake = {x = 0, y = 0, intensity = 0, duration = 0}
+    self.trail_particles = {}
+    self.sparkles = {}
+    self.rings = {}
     return self
 end
 
@@ -105,6 +108,51 @@ function ParticleSystem:shake(intensity, duration)
     self.screen_shake.duration = duration
 end
 
+function ParticleSystem:sparkle(x, y, color)
+    for i = 1, 8 do
+        local angle = (i / 8) * math.pi * 2
+        local dist = 10 + math.random() * 15
+        table.insert(self.sparkles, {
+            x = x + math.cos(angle) * dist,
+            y = y + math.sin(angle) * dist,
+            life = 0.5,
+            max_life = 0.5,
+            color = color or {1, 0.9, 0.3},
+            size = 2 + math.random() * 2
+        })
+    end
+end
+
+function ParticleSystem:ring(x, y, radius, color, duration)
+    table.insert(self.rings, {
+        x = x,
+        y = y,
+        radius = 0,
+        max_radius = radius,
+        life = duration or 0.5,
+        max_life = duration or 0.5,
+        color = color or {0.5, 0.8, 1},
+        width = 3
+    })
+end
+
+function ParticleSystem:combo(combo_count)
+    if combo_count > 1 then
+        local color = {1, 0.6, 0.2}
+        if combo_count > 10 then color = {1, 0.3, 0.3}
+        elseif combo_count > 5 then color = {1, 0.5, 0.1}
+        elseif combo_count > 3 then color = {1, 0.8, 0.2}
+        end
+        self:flash(color[1], color[2], color[3], 0.15, 0.1)
+        self:shake(3 + combo_count * 0.5, 0.2)
+    end
+end
+
+function ParticleSystem:levelup()
+    self:flash(0.2, 1, 0.4, 0.4, 0.5)
+    self:shake(8, 0.5)
+end
+
 function ParticleSystem:update(dt)
     for i = #self.particles, 1, -1 do
         local p = self.particles[i]
@@ -115,6 +163,24 @@ function ParticleSystem:update(dt)
         
         if p.life <= 0 then
             table.remove(self.particles, i)
+        end
+    end
+    
+    for i = #self.sparkles, 1, -1 do
+        local s = self.sparkles[i]
+        s.life = s.life - dt
+        if s.life <= 0 then
+            table.remove(self.sparkles, i)
+        end
+    end
+    
+    for i = #self.rings, 1, -1 do
+        local r = self.rings[i]
+        r.life = r.life - dt
+        r.radius = r.radius + (r.max_radius / r.max_life) * dt
+        r.width = r.width * 0.95
+        if r.life <= 0 then
+            table.remove(self.rings, i)
         end
     end
     
@@ -144,6 +210,19 @@ function ParticleSystem:draw()
         local alpha = p.life / p.max_life
         love.graphics.setColor(p.color[1], p.color[2], p.color[3], alpha)
         love.graphics.circle("fill", p.x, p.y, p.size * alpha)
+    end
+    
+    for _, s in ipairs(self.sparkles) do
+        local alpha = s.life / s.max_life
+        love.graphics.setColor(s.color[1], s.color[2], s.color[3], alpha)
+        love.graphics.circle("fill", s.x, s.y, s.size * alpha)
+    end
+    
+    for _, r in ipairs(self.rings) do
+        local alpha = r.life / r.max_life
+        love.graphics.setColor(r.color[1], r.color[2], r.color[3], alpha)
+        love.graphics.setLineWidth(r.width)
+        love.graphics.circle("line", r.x, r.y, r.radius)
     end
     
     love.graphics.pop()
